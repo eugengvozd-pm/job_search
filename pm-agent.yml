@@ -1,0 +1,45 @@
+name: PM Job Agent
+
+# Runs on GitHub's servers — no computer of yours needs to be on.
+on:
+  schedule:
+    # 06:00 UTC = 09:00 в Минске (UTC+3). Cron в Actions всегда в UTC.
+    - cron: "0 6 * * *"
+  workflow_dispatch:        # кнопка ручного запуска во вкладке Actions
+
+# Нужно, чтобы агент мог коммитить обновлённый seen_ids.json обратно в репозиторий.
+permissions:
+  contents: write
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run agent
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python pm_agent_telegram.py
+
+      - name: Persist memory (seen_ids.json)
+        run: |
+          if [ -n "$(git status --porcelain seen_ids.json)" ]; then
+            git config user.name "pm-job-agent"
+            git config user.email "actions@github.com"
+            git add seen_ids.json
+            git commit -m "Update seen vacancies [skip ci]"
+            git push
+          else
+            echo "No changes to seen_ids.json"
+          fi
